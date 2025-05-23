@@ -35,6 +35,7 @@ $ModelsHelper = new ModelsHelper();
 
 $models = $ModelsHelper->getModels();
 $models = $ModelsHelper->formatModels($models);
+$ModelsHelper->createModels($models, $targetFolder);
 dump($models);
 
 $ModelsHelper->createMigrations($models, $targetFolder);

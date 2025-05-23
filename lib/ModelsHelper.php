@@ -51,6 +51,9 @@ class ModelsHelper {
                         'columns' => []
                     ];
                 }
+                if ($ar['parameters'] != '' && $ar['parameters'] != '0') {
+                    $ar['parameters'] = unserialize($ar['parameters']);
+                }
                 $tables[$tables_names[$ar['table_id']]]['columns'][$ar['name']] = $ar;
             }
         }
@@ -63,6 +66,9 @@ class ModelsHelper {
         foreach ($tables as $tname => &$table){
             foreach ($table['columns'] as $column){
                 $table['tablename'] = $tname;
+
+
+                
                 if($column['type'] === 'primary_key'){
                     $table['primary_key'] = $column['name'];
                     continue;
@@ -100,7 +106,7 @@ class ModelsHelper {
         }
 
         if(!empty($createdMigrations)){
-            $tpl = file_get_contents(SITEBILL_DOCUMENT_ROOT.'/sitebill2laravel/stubs/migration.stub');
+            $tpl = file_get_contents(__DIR__.'/../stubs/migration.stub');
             $counter = 1;
             $datef = date('Y_m_d');
 
@@ -161,13 +167,37 @@ class ModelsHelper {
 
         $type = $column['type'];
         $name = $column['name'];
+
+        $rules = [];
+        if (isset($column['parameters']['rules']) && $column['parameters']['rules'] != '') {
+            $rules_string = $column['parameters']['rules'];
+
+            $rules_parts = explode(',', $rules_string);
+            foreach ($rules_parts as $r => $rp) {
+                $rules_parts[$r] = trim($rp);
+            }
+
+            foreach ($rules_parts as $rp) {
+                $x = explode(':', $rp);
+                $rules[trim($x[0])] = (isset($x[1]) ? trim($x[1]) : '');
+            }
+        }
+
+        //dump($rules);
+
+        
         $ret = '';
         switch($type){
             case 'primary_key' : {
                 break;
             }
             case 'safe_string' : {
-                $ret = '$table->string(\''.$name.'\');';
+                if (isset($rules['Type']) && $rules['Type'] === 'int') {
+                    $ret = '$table->integer(\''.$name.'\')->default(0);';
+                }else{
+                    $ret = '$table->string(\''.$name.'\');';
+                }
+                
                 //
                 break;
             }
@@ -296,4 +326,60 @@ class ModelsHelper {
         return '$this->addMediaCollection(\''.$element.'\')->acceptsMimeTypes(['.'\''.implode('\', \'', $defaultGraficMedia).'\''.'])->registerMediaConversions(function (Media $media) {$this->addMediaConversion(\''.$prevname.'\')->fit(Manipulations::FIT_CROP, '.$sizes[0].', '.$sizes[1].')->nonQueued();});';
     }
 
+    public function createModels($models, $targetFolder){
+        $createdModels = [];
+        foreach ($models as $name => $model){
+            //echo 'Получили модель: '.$name.'<br>';
+            if(!isset($createdModels[$name])){
+                $this->createModel($model, $models, $createdModels);
+            }
+        }
+
+        //dd($createdModels);
+
+        if(!empty($createdModels)){
+            $tpl = file_get_contents(__DIR__.'/../stubs/model.stub');
+            foreach ($createdModels as $t => $d){
+                $migrationname = $d['content']['Model'].'.php';
+                $tplx = str_replace(['{Model}', '{TableName}', '{PrimaryKeyName}'], [$d['content']['Model'], $d['content']['TableName'], $d['content']['PrimaryKeyName']], $tpl);
+                $f = fopen($targetFolder.'app/Models/'.$migrationname, 'w');
+                fwrite($f, $tplx);
+                fclose($f);
+            }
+        }
+    }
+
+    public function createModel($model, $models, &$createdModels){
+        /*$modelname = ucfirst($model['tablename']);
+        $tablename = ucfirst($model['tablename']);
+        $primarykey = ucfirst($model['primary_key']);
+        if(isset($model['relation_tables']) && !empty($model['relation_tables'])){
+            foreach ($model['relation_tables'] as $related_model){
+                $related_table = $related_model;
+                if(!isset($createdMigrations[$related_table]) && isset($models[$related_table])){
+                    if($model['tablename'] !== $related_table){
+                        $this->createMigration($models[$related_table], $models, $createdMigrations);
+                    }
+                }
+            }
+        }*/
+
+
+        $vars = [];
+
+        $vars['Model'] = ucfirst($model['tablename']);
+        $vars['TableName'] = $model['tablename'];
+        $vars['PrimaryKeyName'] = $model['primary_key'];
+
+
+
+        $createdModels[$model['tablename']] = [
+            'name' => $model['tablename'],
+            'content' => $vars
+        ];
+
+        //dd($vars);
+    }
+
 }
+
